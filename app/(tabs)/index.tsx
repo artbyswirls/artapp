@@ -79,8 +79,34 @@ export default function FeedScreen() {
     }
 
     if (likes[postId]) {
-      const { error } = await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', userId);
-      console.log('Unlike error:', error);
+      const { error } = await supabase.from('likes').insert({ post_id: postId, user_id: userId });
+console.log('Like error:', error);
+
+const { data: postData } = await supabase
+  .from('posts')
+  .select('user_id, title')
+  .eq('id', postId)
+  .single();
+
+if (postData && postData.user_id !== userId) {
+  const { data: userData } = await supabase
+    .from('users')
+    .select('push_token')
+    .eq('id', postData.user_id)
+    .single();
+
+  if (userData?.push_token) {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: userData.push_token,
+        title: '❤️ New Like!',
+        body: `Someone liked your post "${postData.title}"`,
+      }),
+    });
+  }
+}
       setLikes(prev => ({ ...prev, [postId]: false }));
       setLikeCounts(prev => ({ ...prev, [postId]: (prev[postId] || 1) - 1 }));
     } else {

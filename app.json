@@ -25,6 +25,12 @@
     },
     "web": {
       "favicon": "./assets/images/icon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a4c92e8a-323c-4498-bd0b-cdf214c1c10c"
+      }
+    },
+    "owner": "artbyswirls"
   }
 }
