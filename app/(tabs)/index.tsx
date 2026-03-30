@@ -9,6 +9,7 @@ type Post = {
   title: string;
   description: string;
   user_id: string;
+  username?: string;
 };
 
 export default function FeedScreen() {
@@ -30,13 +31,17 @@ export default function FeedScreen() {
   async function fetchPosts() {
     const { data, error } = await supabase
       .from('posts')
-      .select('*')
+      .select('*, users(username)')
       .order('created_at', { ascending: false });
 
     if (error) console.log('Error fetching posts:', error);
     else {
-      setPosts(data || []);
-      fetchLikes(data || []);
+      const postsWithUsername = (data || []).map((post: any) => ({
+        ...post,
+        username: post.users?.username || 'Artist',
+      }));
+      setPosts(postsWithUsername);
+      fetchLikes(postsWithUsername);
     }
     setLoading(false);
   }
@@ -101,6 +106,9 @@ export default function FeedScreen() {
         posts.map((post) => (
           <TouchableOpacity key={post.id} style={styles.card} onPress={() => router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description } })}>
             <Image source={{ uri: post.image_url }} style={styles.image} />
+            <TouchableOpacity onPress={() => router.push({ pathname: '/artist', params: { user_id: post.user_id, username: post.username || 'Artist' } })}>
+  <Text style={styles.artistName}>@{post.username || 'Artist'}</Text>
+</TouchableOpacity>
             <Text style={styles.artTitle}>{post.title}</Text>
             {post.description ? <Text style={styles.description}>{post.description}</Text> : null}
             <TouchableOpacity style={styles.likeButton} onPress={() => handleLike(post.id)}>
@@ -152,6 +160,11 @@ const styles = StyleSheet.create({
   artTitle: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  artistName: {
+    fontSize: 14,
+    color: '#9b59b6',
+    marginBottom: 4,
   },
   description: {
     fontSize: 14,
