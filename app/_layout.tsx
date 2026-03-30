@@ -4,32 +4,18 @@ import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { supabase } from '../supabase';
-import { registerForPushNotifications, savePushToken } from './notifications';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.replace('/login');
-      } else {
-        registerForPushNotifications().then((token) => {
-          if (token) savePushToken(token);
-        });
-      }
+      if (!session) router.replace('/login');
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
-        router.replace('/login');
-      }
-      if (event === 'SIGNED_IN' && session) {
-        router.replace('/(tabs)');
-        registerForPushNotifications().then((token) => {
-          if (token) savePushToken(token);
-        });
-      }
+      if (event === 'SIGNED_OUT' || !session) router.replace('/login');
+      if (event === 'SIGNED_IN' && session) router.replace('/(tabs)');
     });
 
     return () => subscription.unsubscribe();
@@ -42,6 +28,8 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="post" options={{ headerShown: false }} />
         <Stack.Screen name="artist" options={{ headerShown: false }} />
+        <Stack.Screen name="messages" options={{ headerShown: false }} />
+        <Stack.Screen name="chat" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

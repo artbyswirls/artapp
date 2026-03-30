@@ -16,30 +16,32 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Feed',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22 }}>🏠</Text>,
+          tabBarIcon: () => <Text style={{ fontSize: 22 }}>🏠</Text>,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
           title: 'Explore',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22 }}>🔍</Text>,
+          tabBarIcon: () => <Text style={{ fontSize: 22 }}>🔍</Text>,
         }}
       />
       <Tabs.Screen
         name="upload"
         options={{
           title: 'Upload',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22 }}>➕</Text>,
+          tabBarIcon: () => <Text style={{ fontSize: 22 }}>➕</Text>,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22 }}>👤</Text>,
+          tabBarIcon: () => <Text style={{ fontSize: 22 }}>👤</Text>,
         }}
       />
+      
+        
     </Tabs>
   );
 }

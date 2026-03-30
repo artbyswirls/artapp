@@ -73,9 +73,13 @@ export default function ProfileScreen() {
         </View>
         <Text style={styles.username}>{username || 'Artist'}</Text>
         <Text style={styles.postCount}>{postCount} {postCount === 1 ? 'post' : 'posts'}</Text>
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.messagesButton} onPress={() => router.push('/messages')}>
+  <Text style={styles.messagesButtonText}>💬 Messages</Text>
+</TouchableOpacity>
+
+<TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+  <Text style={styles.signOutText}>Sign Out</Text>
+</TouchableOpacity>
       </View>
 
       <Text style={styles.galleryHeader}>My Gallery</Text>
@@ -174,5 +178,18 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 16,
     marginTop: 40,
+  },messagesButton: {
+    backgroundColor: '#9b59b6',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginBottom: 10,
+    width: '80%',
+    alignItems: 'center',
+  },
+  messagesButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });

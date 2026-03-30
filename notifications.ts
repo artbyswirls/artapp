@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { supabase } from '../supabase';
+import { supabase } from './supabase';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -20,15 +20,12 @@ export async function registerForPushNotifications() {
     finalStatus = status;
   }
 
-  if (finalStatus !== 'granted') {
-    console.log('Permission not granted for notifications');
-    return null;
-  }
+  if (finalStatus !== 'granted') return null;
 
   const token = (await Notifications.getExpoPushTokenAsync({
     projectId: 'a4c92e8a-323c-4498-bd0b-cdf214c1c10c',
   })).data;
-  console.log('Push token:', token);
+
   return token;
 }
 

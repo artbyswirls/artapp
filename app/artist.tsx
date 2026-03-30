@@ -94,13 +94,21 @@ export default function ArtistScreen() {
         <Text style={styles.followerCount}>{followerCount} {followerCount === 1 ? 'follower' : 'followers'}</Text>
 
         {currentUserId !== user_id && (
-          <TouchableOpacity
-            style={[styles.followButton, following && styles.followingButton]}
-            onPress={handleFollow}>
-            <Text style={[styles.followButtonText, following && styles.followingButtonText]}>
-              {following ? 'Following' : 'Follow'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.followButton, following && styles.followingButton]}
+              onPress={handleFollow}>
+              <Text style={[styles.followButtonText, following && styles.followingButtonText]}>
+                {following ? 'Following' : 'Follow'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.messageButton}
+              onPress={() => router.push({ pathname: '/chat', params: { user_id, username } })}>
+              <Text style={styles.messageButtonText}>💬 Message</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -217,5 +225,20 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 16,
     marginTop: 40,
+  },buttonRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  messageButton: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#9b59b6',
+  },
+  messageButtonText: {
+    color: '#9b59b6',
+    fontWeight: '600',
   },
 });
