@@ -9,11 +9,17 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
         router.replace('/login');
       }
-      if (event === 'SIGNED_IN') {
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.replace('/login');
+      }
+      if (event === 'SIGNED_IN' && session) {
         router.replace('/(tabs)');
       }
     });

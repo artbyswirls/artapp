@@ -1,19 +1,115 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../../supabase';
+
+type Post = {
+  id: string;
+  image_url: string;
+  title: string;
+  description: string;
+  user_id: string;
+};
 
 export default function FeedScreen() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [likes, setLikes] = useState<{ [key: string]: boolean }>({});
+  const [likeCounts, setLikeCounts] = useState<{ [key: string]: number }>({});
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+      }
+      fetchPosts();
+    });
+  }, []);
+
+  async function fetchPosts() {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) console.log('Error fetching posts:', error);
+    else {
+      setPosts(data || []);
+      fetchLikes(data || []);
+    }
+    setLoading(false);
+  }
+
+  async function fetchLikes(posts: Post[]) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    const { data: userLikes } = await supabase
+      .from('likes')
+      .select('post_id')
+      .eq('user_id', session.user.id);
+
+    const likedMap: { [key: string]: boolean } = {};
+    userLikes?.forEach(like => {
+      likedMap[like.post_id] = true;
+    });
+    setLikes(likedMap);
+
+    const counts: { [key: string]: number } = {};
+    for (const post of posts) {
+      const { count } = await supabase
+        .from('likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('post_id', post.id);
+      counts[post.id] = count || 0;
+    }
+    setLikeCounts(counts);
+  }
+
+  async function handleLike(postId: string) {
+    if (!userId) {
+      console.log('No user ID found');
+      return;
+    }
+
+    if (likes[postId]) {
+      const { error } = await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', userId);
+      console.log('Unlike error:', error);
+      setLikes(prev => ({ ...prev, [postId]: false }));
+      setLikeCounts(prev => ({ ...prev, [postId]: (prev[postId] || 1) - 1 }));
+    } else {
+      const { error } = await supabase.from('likes').insert({ post_id: postId, user_id: userId });
+      console.log('Like error:', error);
+      setLikes(prev => ({ ...prev, [postId]: true }));
+      setLikeCounts(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+    }
+  }
+
+  if (loading) return (
+    <View style={styles.centered}>
+      <ActivityIndicator size="large" color="#9b59b6" />
+    </View>
+  );
+
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.header}>🎨 ArtApp</Text>
-      <View style={styles.card}>
-        <View style={styles.imagePlaceholder} />
-        <Text style={styles.artistName}>Artist Name</Text>
-        <Text style={styles.artTitle}>Artwork Title</Text>
-      </View>
-      <View style={styles.card}>
-        <View style={styles.imagePlaceholder} />
-        <Text style={styles.artistName}>Artist Name</Text>
-        <Text style={styles.artTitle}>Artwork Title</Text>
-      </View>
+      {posts.length === 0 ? (
+        <Text style={styles.empty}>No posts yet. Be the first to share your art!</Text>
+      ) : (
+        posts.map((post) => (
+          <View key={post.id} style={styles.card}>
+            <Image source={{ uri: post.image_url }} style={styles.image} />
+            <Text style={styles.artTitle}>{post.title}</Text>
+            {post.description ? <Text style={styles.description}>{post.description}</Text> : null}
+            <TouchableOpacity style={styles.likeButton} onPress={() => handleLike(post.id)}>
+              <Text style={styles.likeText}>
+                {likes[post.id] ? '❤️' : '🤍'} {likeCounts[post.id] || 0}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ))
+      )}
     </ScrollView>
   );
 }
@@ -23,6 +119,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f9f9f9',
     padding: 16,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     fontSize: 28,
@@ -41,19 +142,32 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
-  imagePlaceholder: {
+  image: {
     width: '100%',
     height: 250,
-    backgroundColor: '#e0e0e0',
     borderRadius: 8,
     marginBottom: 10,
-  },
-  artistName: {
-    fontSize: 14,
-    color: '#888',
   },
   artTitle: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  description: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 4,
+  },
+  likeButton: {
+    marginTop: 10,
+    padding: 8,
+  },
+  likeText: {
+    fontSize: 18,
+  },
+  empty: {
+    textAlign: 'center',
+    color: '#888',
+    fontSize: 16,
+    marginTop: 40,
   },
 });

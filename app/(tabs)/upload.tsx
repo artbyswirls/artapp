@@ -34,13 +34,17 @@ export default function UploadScreen() {
       const { data: { user } } = await supabase.auth.getUser();
 
       const fileName = `${user?.id}/${Date.now()}.jpg`;
-      const response = await fetch(image);
-      const blob = await response.blob();
-      const arrayBuffer = await blob.arrayBuffer();
 
-      const { error: uploadError } = await supabase.storage
-        .from('posts')
-        .upload(fileName, arrayBuffer, { contentType: 'image/jpeg' });
+const formData = new FormData();
+formData.append('file', {
+  uri: image,
+  name: fileName,
+  type: 'image/jpeg',
+} as any);
+
+const { error: uploadError } = await supabase.storage
+  .from('posts')
+  .upload(fileName, formData, { contentType: 'multipart/form-data' });
 
       if (uploadError) throw uploadError;
 
