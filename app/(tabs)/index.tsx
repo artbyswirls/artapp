@@ -2,7 +2,7 @@ import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, Image, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from '../../supabase';
 
@@ -98,23 +98,14 @@ export default function FeedScreen() {
   const renderPost = ({ item: post }: { item: Post }) => {
     let lastTap = 0;
 
-    const pan = PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => g.dy < -10,
-      onPanResponderRelease: (_, g) => {
-        if (g.dy < -50) handleSwipeUp(post);
-      },
-    });
-
     function handleDoubleTap() {
       const now = Date.now();
-      if (now - lastTap < 300) {
-        handleLike(post.id);
-      }
+      if (now - lastTap < 300) handleLike(post.id);
       lastTap = now;
     }
 
     return (
-      <TouchableOpacity activeOpacity={1} style={styles.slide} {...pan.panHandlers} onPress={handleDoubleTap}>
+      <TouchableOpacity activeOpacity={1} style={styles.slide} onPress={handleDoubleTap}>
         <Image source={{ uri: post.image_url }} style={styles.image} resizeMode="cover" />
         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.overlay}>
           <TouchableOpacity
@@ -133,7 +124,9 @@ export default function FeedScreen() {
               <Text style={styles.actionText}>💬 Comment</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.swipeHint}>↑ Swipe up for details</Text>
+          <TouchableOpacity onPress={() => handleSwipeUp(post)}>
+            <Text style={styles.swipeHint}>↑ Tap for details</Text>
+          </TouchableOpacity>
         </LinearGradient>
       </TouchableOpacity>
     );
