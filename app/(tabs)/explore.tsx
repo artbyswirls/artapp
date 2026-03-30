@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../supabase';
 
+const CATEGORIES = ['portrait', 'landscape', 'abstract', 'digital', 'photography', 'traditional', 'fantasy', 'anime'];
+
 type Post = {
   id: string;
   image_url: string;
@@ -17,21 +19,29 @@ export default function ExploreScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('');
 
-  async function handleSearch() {
-    if (!query.trim()) return;
+  async function handleSearch(searchQuery?: string) {
+    const q = searchQuery || query;
+    if (!q.trim()) return;
     setLoading(true);
     setSearched(true);
 
     const { data, error } = await supabase
       .from('posts')
       .select('*')
-      .or(`title.ilike.%${query}%,category.ilike.%${query}%,description.ilike.%${query}%`)
+      .or(`title.ilike.%${q}%,category.ilike.%${q}%,description.ilike.%${q}%`)
       .order('created_at', { ascending: false });
 
     if (error) console.log('Search error:', error);
     else setPosts(data || []);
     setLoading(false);
+  }
+
+  function handleCategoryPress(category: string) {
+    setActiveCategory(category);
+    setQuery(category);
+    handleSearch(category);
   }
 
   return (
@@ -41,16 +51,29 @@ export default function ExploreScreen() {
       <View style={styles.searchRow}>
         <TextInput
           style={styles.input}
-          placeholder="Search by title, category..."
+          placeholder="Search by title, category, hashtag..."
           value={query}
           onChangeText={setQuery}
-          onSubmitEditing={handleSearch}
+          onSubmitEditing={() => handleSearch()}
           returnKeyType="search"
         />
-        <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
+        <TouchableOpacity style={styles.searchButton} onPress={() => handleSearch()}>
           <Text style={styles.searchButtonText}>Go</Text>
         </TouchableOpacity>
       </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesRow}>
+        {CATEGORIES.map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            style={[styles.categoryChip, activeCategory === cat && styles.activeCategoryChip]}
+            onPress={() => handleCategoryPress(cat)}>
+            <Text style={[styles.categoryChipText, activeCategory === cat && styles.activeCategoryChipText]}>
+              #{cat}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {loading ? (
         <ActivityIndicator size="large" color="#9b59b6" style={{ marginTop: 40 }} />
@@ -63,7 +86,7 @@ export default function ExploreScreen() {
               <TouchableOpacity
                 key={post.id}
                 style={styles.card}
-                onPress={() => router.push({ pathname: '../post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description } })}>
+                onPress={() => router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description } })}>
                 <Image source={{ uri: post.image_url }} style={styles.image} />
                 <View style={styles.cardInfo}>
                   <Text style={styles.title}>{post.title}</Text>
@@ -93,7 +116,7 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   input: {
     flex: 1,
@@ -115,6 +138,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  categoriesRow: {
+    marginBottom: 16,
+    flexGrow: 0,
+  },
+  categoryChip: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  activeCategoryChip: {
+    backgroundColor: '#9b59b6',
+    borderColor: '#9b59b6',
+  },
+  categoryChipText: {
+    color: '#555',
+    fontSize: 14,
+  },
+  activeCategoryChipText: {
+    color: '#fff',
   },
   card: {
     backgroundColor: '#fff',
