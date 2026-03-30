@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../supabase';
@@ -98,7 +99,7 @@ export default function FeedScreen() {
         <Text style={styles.empty}>No posts yet. Be the first to share your art!</Text>
       ) : (
         posts.map((post) => (
-          <View key={post.id} style={styles.card}>
+          <TouchableOpacity key={post.id} style={styles.card} onPress={() => router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description } })}>
             <Image source={{ uri: post.image_url }} style={styles.image} />
             <Text style={styles.artTitle}>{post.title}</Text>
             {post.description ? <Text style={styles.description}>{post.description}</Text> : null}
@@ -107,7 +108,7 @@ export default function FeedScreen() {
                 {likes[post.id] ? '❤️' : '🤍'} {likeCounts[post.id] || 0}
               </Text>
             </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         ))
       )}
     </ScrollView>
