@@ -1,5 +1,6 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../supabase';
 
 export default function LoginScreen() {
@@ -9,9 +10,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    console.log('data:', data);
-    console.log('error:', error);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) Alert.alert('Error', error.message);
     setLoading(false);
   }
@@ -25,90 +24,133 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🎨 ArtApp</Text>
-      <Text style={styles.subtitle}>Share your art with the world</Text>
+    <LinearGradient
+      colors={['#f953c6', '#b91d73', '#4776e6']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradient}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
+        <View style={styles.logoContainer}>
+          <Text style={styles.emoji}>🎨</Text>
+          <Text style={styles.appName}>ArtApp</Text>
+          <Text style={styles.tagline}>Share your art with the world</Text>
+        </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
+        <View style={styles.card}>
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor="#aaa"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? 'Loading...' : 'Log In'}</Text>
-      </TouchableOpacity>
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#aaa"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
 
-      <TouchableOpacity style={styles.secondaryButton} onPress={handleSignUp} disabled={loading}>
-        <Text style={styles.secondaryButtonText}>Create Account</Text>
-      </TouchableOpacity>
-    </View>
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
+            <LinearGradient
+              colors={['#f953c6', '#b91d73']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.loginGradient}>
+              <Text style={styles.loginButtonText}>{loading ? 'Loading...' : 'Log In'}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp} disabled={loading}>
+            <Text style={styles.signUpButtonText}>Create Account</Text>
+          </TouchableOpacity>
+        </View>
+
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f9f9f9',
     padding: 24,
   },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  emoji: {
+    fontSize: 64,
     marginBottom: 8,
   },
-  subtitle: {
+  appName: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 2,
+  },
+  tagline: {
     fontSize: 16,
-    color: '#888',
-    marginBottom: 40,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 8,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 24,
+    padding: 24,
   },
   input: {
     width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    color: '#333',
   },
-  button: {
+  loginButton: {
     width: '100%',
-    backgroundColor: '#9b59b6',
-    borderRadius: 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  loginGradient: {
     padding: 16,
     alignItems: 'center',
-    marginBottom: 12,
   },
-  buttonText: {
+  loginButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    letterSpacing: 1,
   },
-  secondaryButton: {
+  signUpButton: {
     width: '100%',
-    borderRadius: 10,
     padding: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#9b59b6',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.8)',
   },
-  secondaryButtonText: {
-    color: '#9b59b6',
+  signUpButtonText: {
+    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
 });
