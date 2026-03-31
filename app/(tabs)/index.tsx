@@ -22,6 +22,7 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [likes, setLikes] = useState<{ [key: string]: boolean }>({});
   const [likeCounts, setLikeCounts] = useState<{ [key: string]: number }>({});
+  const [favorites, setFavorites] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -49,6 +50,7 @@ export default function FeedScreen() {
       }));
       setPosts(postsWithUsername);
       fetchLikes(postsWithUsername);
+      fetchFavorites();
     }
     setLoading(false);
   }
@@ -77,6 +79,20 @@ export default function FeedScreen() {
     setLikeCounts(counts);
   }
 
+  async function fetchFavorites() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    const { data: userFavorites } = await supabase
+      .from('favorites')
+      .select('post_id')
+      .eq('user_id', session.user.id);
+
+    const favMap: { [key: string]: boolean } = {};
+    userFavorites?.forEach(fav => { favMap[fav.post_id] = true; });
+    setFavorites(favMap);
+  }
+
   async function handleLike(postId: string) {
     if (!userId) return;
     if (likes[postId]) {
@@ -90,7 +106,18 @@ export default function FeedScreen() {
     }
   }
 
-  function handleSwipeUp(post: Post) {
+  async function handleFavorite(postId: string) {
+    if (!userId) return;
+    if (favorites[postId]) {
+      await supabase.from('favorites').delete().eq('post_id', postId).eq('user_id', userId);
+      setFavorites(prev => ({ ...prev, [postId]: false }));
+    } else {
+      await supabase.from('favorites').insert({ post_id: postId, user_id: userId });
+      setFavorites(prev => ({ ...prev, [postId]: true }));
+    }
+  }
+
+  function handleShowDetails(post: Post) {
     setSelectedPost(post);
     bottomSheetRef.current?.expand();
   }
@@ -118,13 +145,16 @@ export default function FeedScreen() {
             <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(post.id)}>
               <Text style={styles.actionText}>{likes[post.id] ? '❤️' : '🤍'} {likeCounts[post.id] || 0}</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={() => handleFavorite(post.id)}>
+              <Text style={styles.actionText}>{favorites[post.id] ? '⭐' : '☆'}</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description } })}>
               <Text style={styles.actionText}>💬 Comment</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => handleSwipeUp(post)}>
+          <TouchableOpacity onPress={() => handleShowDetails(post)}>
             <Text style={styles.swipeHint}>↑ Tap for details</Text>
           </TouchableOpacity>
         </LinearGradient>
@@ -192,8 +222,24 @@ export default function FeedScreen() {
               ) : (
                 <Text style={styles.noDescription}>No description provided.</Text>
               )}
+
               <TouchableOpacity
-                style={styles.viewPostButton}
+                style={[styles.sheetButton, { marginBottom: 10 }]}
+                onPress={() => {
+                  bottomSheetRef.current?.close();
+                  router.push({ pathname: '/addtoalbum', params: { post_id: selectedPost.id } });
+                }}>
+                <LinearGradient
+                  colors={['#4776e6', '#8e54e9']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sheetButtonGradient}>
+                  <Text style={styles.sheetButtonText}>🗂️ Add to Album</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sheetButton}
                 onPress={() => {
                   bottomSheetRef.current?.close();
                   router.push({ pathname: '/post', params: { id: selectedPost.id, image_url: selectedPost.image_url, title: selectedPost.title, description: selectedPost.description } });
@@ -202,8 +248,8 @@ export default function FeedScreen() {
                   colors={['#f953c6', '#b91d73']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.viewPostGradient}>
-                  <Text style={styles.viewPostText}>View Full Post & Comments</Text>
+                  style={styles.sheetButtonGradient}>
+                  <Text style={styles.sheetButtonText}>💬 View Full Post & Comments</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </>
@@ -347,15 +393,15 @@ const styles = StyleSheet.create({
     color: '#aaa',
     marginBottom: 24,
   },
-  viewPostButton: {
+  sheetButton: {
     borderRadius: 12,
     overflow: 'hidden',
   },
-  viewPostGradient: {
+  sheetButtonGradient: {
     padding: 16,
     alignItems: 'center',
   },
-  viewPostText: {
+  sheetButtonText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,

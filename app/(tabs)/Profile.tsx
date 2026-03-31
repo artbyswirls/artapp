@@ -1,7 +1,8 @@
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../supabase';
 
 type Post = {
@@ -15,11 +16,27 @@ type Post = {
 
 export default function ProfileScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [favoritePosts, setFavoritePosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [postCount, setPostCount] = useState(0);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [editingBio, setEditingBio] = useState(false);
+  const [editingSocials, setEditingSocials] = useState(false);
+  const [newBio, setNewBio] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
+  const [instagram, setInstagram] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [twitter, setTwitter] = useState('');
+  const [website, setWebsite] = useState('');
+  const [newInstagram, setNewInstagram] = useState('');
+  const [newTiktok, setNewTiktok] = useState('');
+  const [newTwitter, setNewTwitter] = useState('');
+  const [newWebsite, setNewWebsite] = useState('');
+  const [activeTab, setActiveTab] = useState('gallery');
 
   useEffect(() => {
     fetchProfile();
@@ -28,20 +45,36 @@ export default function ProfileScreen() {
   async function fetchProfile() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
-    const userId = session.user.id;
+    const uid = session.user.id;
+    setUserId(uid);
 
     const { data: userData } = await supabase
       .from('users')
-      .select('username')
-      .eq('id', userId)
+      .select('username, bio, avatar_url, instagram, tiktok, twitter, website')
+      .eq('id', uid)
       .single();
-    if (userData) setUsername(userData.username);
+
+    if (userData) {
+      setUsername(userData.username);
+      setBio(userData.bio || '');
+      setNewBio(userData.bio || '');
+      setAvatarUrl(userData.avatar_url);
+      setInstagram(userData.instagram || '');
+      setTiktok(userData.tiktok || '');
+      setTwitter(userData.twitter || '');
+      setWebsite(userData.website || '');
+      setNewInstagram(userData.instagram || '');
+      setNewTiktok(userData.tiktok || '');
+      setNewTwitter(userData.twitter || '');
+      setNewWebsite(userData.website || '');
+    }
 
     const { data: postsData } = await supabase
       .from('posts')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', uid)
       .order('created_at', { ascending: false });
+
     if (postsData) {
       setPosts(postsData);
       setPostCount(postsData.length);
@@ -50,16 +83,82 @@ export default function ProfileScreen() {
     const { count: followers } = await supabase
       .from('follows')
       .select('*', { count: 'exact', head: true })
-      .eq('following_id', userId);
+      .eq('following_id', uid);
     setFollowerCount(followers || 0);
 
     const { count: following } = await supabase
       .from('follows')
       .select('*', { count: 'exact', head: true })
-      .eq('follower_id', userId);
+      .eq('follower_id', uid);
     setFollowingCount(following || 0);
 
     setLoading(false);
+  }
+
+  async function fetchFavorites() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    const { data } = await supabase
+      .from('favorites')
+      .select('post_id, posts(*)')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    if (data) {
+      const favs = data.map((f: any) => f.posts).filter(Boolean);
+      setFavoritePosts(favs);
+    }
+  }
+
+  async function handlePickAvatar() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && userId) {
+      const uri = result.assets[0].uri;
+      const fileName = `avatars/${userId}.jpg`;
+
+      const formData = new FormData();
+      formData.append('file', { uri, name: fileName, type: 'image/jpeg' } as any);
+
+      const { error: uploadError } = await supabase.storage
+        .from('posts')
+        .upload(fileName, formData, { contentType: 'multipart/form-data', upsert: true });
+
+      if (uploadError) { Alert.alert('Error', uploadError.message); return; }
+
+      const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(fileName);
+      await supabase.from('users').update({ avatar_url: publicUrl }).eq('id', userId);
+      setAvatarUrl(publicUrl);
+      Alert.alert('Success', 'Profile picture updated!');
+    }
+  }
+
+  async function handleSaveBio() {
+    if (!userId) return;
+    await supabase.from('users').update({ bio: newBio }).eq('id', userId);
+    setBio(newBio);
+    setEditingBio(false);
+  }
+
+  async function handleSaveSocials() {
+    if (!userId) return;
+    await supabase.from('users').update({
+      instagram: newInstagram,
+      tiktok: newTiktok,
+      twitter: newTwitter,
+      website: newWebsite,
+    }).eq('id', userId);
+    setInstagram(newInstagram);
+    setTiktok(newTiktok);
+    setTwitter(newTwitter);
+    setWebsite(newWebsite);
+    setEditingSocials(false);
   }
 
   async function handleSignOut() {
@@ -73,6 +172,8 @@ export default function ProfileScreen() {
     </View>
   );
 
+  const displayedPosts = activeTab === 'gallery' ? posts : favoritePosts;
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <LinearGradient
@@ -80,10 +181,72 @@ export default function ProfileScreen() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.headerGradient}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>👤</Text>
-        </View>
+
+        <TouchableOpacity style={styles.avatar} onPress={handlePickAvatar}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>👤</Text>
+          )}
+          <View style={styles.avatarEditBadge}>
+            <Text style={styles.avatarEditText}>✏️</Text>
+          </View>
+        </TouchableOpacity>
+
         <Text style={styles.username}>@{username || 'Artist'}</Text>
+
+        {editingBio ? (
+          <View style={styles.bioEditContainer}>
+            <TextInput
+              style={styles.bioInput}
+              value={newBio}
+              onChangeText={setNewBio}
+              placeholder="Write a bio..."
+              placeholderTextColor="rgba(255,255,255,0.6)"
+              multiline
+              maxLength={150}
+            />
+            <View style={styles.bioButtons}>
+              <TouchableOpacity style={styles.bioSaveButton} onPress={handleSaveBio}>
+                <Text style={styles.bioSaveText}>Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.bioCancelButton} onPress={() => setEditingBio(false)}>
+                <Text style={styles.bioCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={() => setEditingBio(true)}>
+            <Text style={styles.bio}>{bio || 'Tap to add a bio...'}</Text>
+          </TouchableOpacity>
+        )}
+
+        {editingSocials ? (
+          <View style={styles.socialsEditContainer}>
+            <TextInput style={styles.socialInput} value={newInstagram} onChangeText={setNewInstagram} placeholder="Instagram username" placeholderTextColor="rgba(255,255,255,0.6)" />
+            <TextInput style={styles.socialInput} value={newTiktok} onChangeText={setNewTiktok} placeholder="TikTok username" placeholderTextColor="rgba(255,255,255,0.6)" />
+            <TextInput style={styles.socialInput} value={newTwitter} onChangeText={setNewTwitter} placeholder="X/Twitter username" placeholderTextColor="rgba(255,255,255,0.6)" />
+            <TextInput style={styles.socialInput} value={newWebsite} onChangeText={setNewWebsite} placeholder="Website URL" placeholderTextColor="rgba(255,255,255,0.6)" autoCapitalize="none" />
+            <View style={styles.bioButtons}>
+              <TouchableOpacity style={styles.bioSaveButton} onPress={handleSaveSocials}>
+                <Text style={styles.bioSaveText}>Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.bioCancelButton} onPress={() => setEditingSocials(false)}>
+                <Text style={styles.bioCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.socialsRow}>
+            {instagram ? <TouchableOpacity onPress={() => Linking.openURL(`https://instagram.com/${instagram}`)}><Text style={styles.socialLink}>📸 Instagram</Text></TouchableOpacity> : null}
+            {tiktok ? <TouchableOpacity onPress={() => Linking.openURL(`https://www.tiktok.com/@${tiktok}`)}><Text style={styles.socialLink}>🎵 TikTok</Text></TouchableOpacity> : null}
+            {twitter ? <TouchableOpacity onPress={() => Linking.openURL(`https://x.com/${twitter}`)}><Text style={styles.socialLink}>🐦 X/Twitter</Text></TouchableOpacity> : null}
+            {website ? <TouchableOpacity onPress={() => Linking.openURL(website)}><Text style={styles.socialLink}>🌐 Website</Text></TouchableOpacity> : null}
+            <TouchableOpacity onPress={() => setEditingSocials(true)}>
+              <Text style={styles.editSocialsText}>{instagram || tiktok || twitter || website ? '✏️ Edit Links' : '➕ Add Social Links'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.statsRow}>
           <View style={styles.stat}>
@@ -103,22 +266,38 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.messagesButton} onPress={() => router.push('/messages')}>
-            <Text style={styles.messagesButtonText}>💬 Messages</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
+  <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/messages')}>
+    <Text style={styles.actionButtonText}>💬 Messages</Text>
+  </TouchableOpacity>
+  <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/albums')}>
+    <Text style={styles.actionButtonText}>🗂️ Albums</Text>
+  </TouchableOpacity>
+  <TouchableOpacity style={styles.actionButton} onPress={handleSignOut}>
+    <Text style={styles.actionButtonText}>Sign Out</Text>
+  </TouchableOpacity>
+</View>
       </LinearGradient>
 
-      <Text style={styles.galleryHeader}>My Gallery</Text>
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'gallery' && styles.activeTabButton]}
+          onPress={() => setActiveTab('gallery')}>
+          <Text style={[styles.tabButtonText, activeTab === 'gallery' && styles.activeTabButtonText]}>🖼️ Gallery</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'favorites' && styles.activeTabButton]}
+          onPress={() => { setActiveTab('favorites'); fetchFavorites(); }}>
+          <Text style={[styles.tabButtonText, activeTab === 'favorites' && styles.activeTabButtonText]}>⭐ Favorites</Text>
+        </TouchableOpacity>
+      </View>
 
-      {posts.length === 0 ? (
-        <Text style={styles.empty}>You haven't posted any art yet!</Text>
+      {displayedPosts.length === 0 ? (
+        <Text style={styles.empty}>
+          {activeTab === 'gallery' ? "You haven't posted any art yet!" : "No favorites yet. Star some posts!"}
+        </Text>
       ) : (
         <View style={styles.grid}>
-          {posts.map((post) => (
+          {displayedPosts.map((post) => (
             <TouchableOpacity
               key={post.id}
               style={styles.gridItem}
@@ -158,15 +337,119 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.6)',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontSize: 40,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarEditText: {
+    fontSize: 12,
   },
   username: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 20,
+    marginBottom: 8,
+  },
+  bio: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+  bioEditContainer: {
+    width: '100%',
+    marginBottom: 12,
+  },
+  bioInput: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    padding: 12,
+    color: '#fff',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    marginBottom: 8,
+  },
+  bioButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  bioSaveButton: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  bioSaveText: {
+    color: '#b91d73',
+    fontWeight: '600',
+  },
+  bioCancelButton: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  bioCancelText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  socialsEditContainer: {
+    width: '100%',
+    marginBottom: 12,
+  },
+  socialInput: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    padding: 12,
+    color: '#fff',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    marginBottom: 8,
+  },
+  socialsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  socialLink: {
+    color: '#fff',
+    fontSize: 13,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  editSocialsText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   statsRow: {
     flexDirection: 'row',
@@ -201,7 +484,7 @@ const styles = StyleSheet.create({
     gap: 10,
     width: '100%',
   },
-  messagesButton: {
+  actionButton: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.25)',
     borderRadius: 12,
@@ -210,30 +493,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.5)',
   },
-  messagesButtonText: {
+  actionButtonText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 15,
   },
-  signOutButton: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  signOutText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  galleryHeader: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+  tabRow: {
+    flexDirection: 'row',
     padding: 16,
+    gap: 10,
+  },
+  tabButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  activeTabButton: {
+    backgroundColor: '#b91d73',
+    borderColor: '#b91d73',
+  },
+  tabButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#888',
+  },
+  activeTabButtonText: {
+    color: '#fff',
   },
   grid: {
     flexDirection: 'row',
@@ -255,5 +544,6 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 16,
     marginTop: 40,
+    padding: 24,
   },
 });

@@ -30,6 +30,9 @@ export default function RootLayout() {
         <Stack.Screen name="artist" options={{ headerShown: false }} />
         <Stack.Screen name="messages" options={{ headerShown: false }} />
         <Stack.Screen name="chat" options={{ headerShown: false }} />
+        <Stack.Screen name="albums" options={{ headerShown: false }} />
+        <Stack.Screen name="album" options={{ headerShown: false }} />
+        <Stack.Screen name="addtoalbum" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
