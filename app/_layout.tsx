@@ -9,13 +9,41 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) router.replace('/login');
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) {
+        router.replace('/login');
+      } else {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('username')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!userData?.username) {
+          router.replace('/setup');
+        } else {
+          router.replace('/(tabs)');
+        }
+      }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) router.replace('/login');
-      if (event === 'SIGNED_IN' && session) router.replace('/(tabs)');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.replace('/login');
+      }
+      if (event === 'SIGNED_IN' && session) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('username')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!userData?.username) {
+          router.replace('/setup');
+        } else {
+          router.replace('/(tabs)');
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -35,6 +63,7 @@ export default function RootLayout() {
         <Stack.Screen name="addtoalbum" options={{ headerShown: false }} />
         <Stack.Screen name="editpost" options={{ headerShown: false }} />
         <Stack.Screen name="trending" options={{ headerShown: false }} />
+        <Stack.Screen name="setup" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

@@ -18,11 +18,19 @@ type Post = {
   user_id: string;
 };
 
+type User = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+};
+
 export default function ExploreScreen() {
   const [query, setQuery] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('');
+  const [searchMode, setSearchMode] = useState(false);
 
   useEffect(() => {
     fetchAllPosts();
@@ -43,20 +51,30 @@ export default function ExploreScreen() {
   async function handleSearch(searchQuery?: string) {
     const q = searchQuery || query;
     setLoading(true);
+    setSearchMode(true);
 
     if (!q.trim()) {
+      setSearchMode(false);
+      setUsers([]);
       fetchAllPosts();
       return;
     }
 
-    const { data, error } = await supabase
-      .from('posts')
-      .select('*')
-      .or(`title.ilike.%${q}%,category.ilike.%${q}%,description.ilike.%${q}%`)
-      .order('created_at', { ascending: false });
+    const [postsResult, usersResult] = await Promise.all([
+      supabase
+        .from('posts')
+        .select('*')
+        .or(`title.ilike.%${q}%,category.ilike.%${q}%,description.ilike.%${q}%`)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('users')
+        .select('id, username, avatar_url')
+        .ilike('username', `%${q}%`)
+        .limit(5),
+    ]);
 
-    if (error) console.log('Error:', error);
-    else setPosts(data || []);
+    setPosts(postsResult.data || []);
+    setUsers(usersResult.data || []);
     setLoading(false);
   }
 
@@ -64,6 +82,8 @@ export default function ExploreScreen() {
     if (activeCategory === category) {
       setActiveCategory('');
       setQuery('');
+      setSearchMode(false);
+      setUsers([]);
       fetchAllPosts();
     } else {
       setActiveCategory(category);
@@ -83,7 +103,7 @@ export default function ExploreScreen() {
         <View style={styles.searchRow}>
           <TextInput
             style={styles.input}
-            placeholder="Search art, categories..."
+            placeholder="Search art or @username..."
             placeholderTextColor="rgba(255,255,255,0.7)"
             value={query}
             onChangeText={setQuery}
@@ -111,20 +131,48 @@ export default function ExploreScreen() {
 
       {loading ? (
         <ActivityIndicator size="large" color="#8e54e9" style={{ marginTop: 40 }} />
-      ) : posts.length === 0 ? (
-        <Text style={styles.empty}>No results found!</Text>
       ) : (
         <ScrollView style={styles.results}>
-          <View style={styles.grid}>
-            {posts.map((post) => (
-              <TouchableOpacity
-                key={post.id}
-                style={styles.gridItem}
-                onPress={() => router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description, category: post.category, post_user_id: post.user_id } })}>
-                <Image source={{ uri: post.image_url }} style={styles.gridImage} />
-              </TouchableOpacity>
-            ))}
-          </View>
+          {searchMode && users.length > 0 && (
+            <View style={styles.usersSection}>
+              <Text style={styles.sectionTitle}>👤 Artists</Text>
+              {users.map((user) => (
+                <TouchableOpacity
+                  key={user.id}
+                  style={styles.userCard}
+                  onPress={() => router.push({ pathname: '/artist', params: { user_id: user.id, username: user.username } })}>
+                  <View style={styles.userAvatar}>
+                    {user.avatar_url ? (
+                      <Image source={{ uri: user.avatar_url }} style={styles.userAvatarImage} />
+                    ) : (
+                      <Text style={styles.userAvatarEmoji}>👤</Text>
+                    )}
+                  </View>
+                  <Text style={styles.userUsername}>@{user.username}</Text>
+                  <Text style={styles.userArrow}>→</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {searchMode && posts.length > 0 && (
+            <Text style={styles.sectionTitle}>🖼️ Posts</Text>
+          )}
+
+          {posts.length === 0 && users.length === 0 ? (
+            <Text style={styles.empty}>No results found!</Text>
+          ) : (
+            <View style={styles.grid}>
+              {posts.map((post) => (
+                <TouchableOpacity
+                  key={post.id}
+                  style={styles.gridItem}
+                  onPress={() => router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description, category: post.category, post_user_id: post.user_id } })}>
+                  <Image source={{ uri: post.image_url }} style={styles.gridImage} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </ScrollView>
       )}
     </View>
@@ -200,6 +248,52 @@ const styles = StyleSheet.create({
   },
   results: {
     flex: 1,
+  },
+  usersSection: {
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  userCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  userAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f0e6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  userAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  userAvatarEmoji: {
+    fontSize: 22,
+  },
+  userUsername: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  userArrow: {
+    fontSize: 18,
+    color: '#888',
   },
   grid: {
     flexDirection: 'row',
