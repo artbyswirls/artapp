@@ -239,7 +239,12 @@ export default function FeedScreen() {
         end={{ x: 1, y: 0 }}
         style={styles.header}>
         <Text style={styles.headerText}>🎨 ArtApp</Text>
-        <Text style={styles.counter}>{currentIndex + 1} / {posts.length}</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={() => router.push('/trending')}>
+            <Text style={styles.trendingButton}>🔥</Text>
+          </TouchableOpacity>
+          <Text style={styles.counter}>{currentIndex + 1} / {posts.length}</Text>
+        </View>
       </LinearGradient>
 
       <FlatList
@@ -340,6 +345,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     letterSpacing: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  trendingButton: {
+    fontSize: 24,
   },
   counter: {
     fontSize: 14,

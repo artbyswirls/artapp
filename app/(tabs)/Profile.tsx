@@ -17,6 +17,8 @@ type Post = {
 export default function ProfileScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [favoritePosts, setFavoritePosts] = useState<Post[]>([]);
+  const [likedPosts, setLikedPosts] = useState<Post[]>([]);
+  const [repostedPosts, setRepostedPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
@@ -113,6 +115,36 @@ export default function ProfileScreen() {
     }
   }
 
+  async function fetchLikedPosts() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    const { data } = await supabase
+      .from('likes')
+      .select('post_id, posts(*)')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    if (data) {
+      const liked = data.map((l: any) => l.posts).filter(Boolean);
+      setLikedPosts(liked);
+    }
+  }
+
+  async function fetchRepostedPosts() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    const { data } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .ilike('title', '🔁%')
+      .order('created_at', { ascending: false });
+
+    if (data) setRepostedPosts(data);
+  }
+
   async function handlePickAvatar() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -177,11 +209,8 @@ export default function ProfileScreen() {
     if (!selectMode) return;
     setSelectedPosts(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(postId)) {
-        newSet.delete(postId);
-      } else {
-        newSet.add(postId);
-      }
+      if (newSet.has(postId)) newSet.delete(postId);
+      else newSet.add(postId);
       return newSet;
     });
   }
@@ -211,13 +240,26 @@ export default function ProfileScreen() {
     );
   }
 
+  function handleTabChange(tab: string) {
+    setSelectMode(false);
+    setSelectedPosts(new Set());
+    setActiveTab(tab);
+    if (tab === 'favorites') fetchFavorites();
+    if (tab === 'likes') fetchLikedPosts();
+    if (tab === 'reposts') fetchRepostedPosts();
+  }
+
   if (loading) return (
     <View style={styles.centered}>
       <ActivityIndicator size="large" color="#f953c6" />
     </View>
   );
 
-  const displayedPosts = activeTab === 'gallery' ? posts : favoritePosts;
+  const displayedPosts =
+    activeTab === 'gallery' ? posts :
+    activeTab === 'favorites' ? favoritePosts :
+    activeTab === 'likes' ? likedPosts :
+    repostedPosts;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -323,18 +365,18 @@ export default function ProfileScreen() {
         </View>
       </LinearGradient>
 
-      <View style={styles.tabRow}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'gallery' && styles.activeTabButton]}
-          onPress={() => { setSelectMode(false); setSelectedPosts(new Set()); setActiveTab('gallery'); }}>
-          <Text style={[styles.tabButtonText, activeTab === 'gallery' && styles.activeTabButtonText]}>🖼️ Gallery</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'favorites' && styles.activeTabButton]}
-          onPress={() => { setSelectMode(false); setSelectedPosts(new Set()); setActiveTab('favorites'); fetchFavorites(); }}>
-          <Text style={[styles.tabButtonText, activeTab === 'favorites' && styles.activeTabButtonText]}>⭐ Favorites</Text>
-        </TouchableOpacity>
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabRow}>
+        {['gallery', 'favorites', 'likes', 'reposts'].map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
+            onPress={() => handleTabChange(tab)}>
+            <Text style={[styles.tabButtonText, activeTab === tab && styles.activeTabButtonText]}>
+              {tab === 'gallery' ? '🖼️ Gallery' : tab === 'favorites' ? '⭐ Favorites' : tab === 'likes' ? '❤️ Likes' : '🔁 Reposts'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {selectMode && activeTab === 'gallery' && (
         <View style={styles.selectBar}>
@@ -352,7 +394,10 @@ export default function ProfileScreen() {
 
       {displayedPosts.length === 0 ? (
         <Text style={styles.empty}>
-          {activeTab === 'gallery' ? "You haven't posted any art yet!" : "No favorites yet. Star some posts!"}
+          {activeTab === 'gallery' ? "No posts yet!" :
+           activeTab === 'favorites' ? "No favorites yet. Star some posts!" :
+           activeTab === 'likes' ? "No liked posts yet!" :
+           "No reposts yet!"}
         </Text>
       ) : (
         <View style={styles.grid}>
@@ -561,18 +606,18 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: '#fff',
     fontWeight: '600',
-    fontSize: 15,
+    fontSize: 13,
   },
   tabRow: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexGrow: 0,
   },
   tabButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 8,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e0e0e0',
