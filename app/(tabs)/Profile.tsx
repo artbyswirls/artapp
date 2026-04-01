@@ -37,6 +37,8 @@ export default function ProfileScreen() {
   const [newTwitter, setNewTwitter] = useState('');
   const [newWebsite, setNewWebsite] = useState('');
   const [activeTab, setActiveTab] = useState('gallery');
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedPosts, setSelectedPosts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchProfile();
@@ -166,6 +168,49 @@ export default function ProfileScreen() {
     if (error) Alert.alert('Error', error.message);
   }
 
+  function handleLongPress(postId: string) {
+    setSelectMode(true);
+    setSelectedPosts(new Set([postId]));
+  }
+
+  function handleSelectPost(postId: string) {
+    if (!selectMode) return;
+    setSelectedPosts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(postId)) {
+        newSet.delete(postId);
+      } else {
+        newSet.add(postId);
+      }
+      return newSet;
+    });
+  }
+
+  function handleCancelSelect() {
+    setSelectMode(false);
+    setSelectedPosts(new Set());
+  }
+
+  async function handleDeleteSelected() {
+    Alert.alert(
+      'Delete Posts',
+      `Are you sure you want to delete ${selectedPosts.size} post${selectedPosts.size > 1 ? 's' : ''}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            const ids = Array.from(selectedPosts);
+            await supabase.from('posts').delete().in('id', ids);
+            setPosts(prev => prev.filter(p => !selectedPosts.has(p.id)));
+            setPostCount(prev => prev - selectedPosts.size);
+            setSelectMode(false);
+            setSelectedPosts(new Set());
+          }
+        }
+      ]
+    );
+  }
+
   if (loading) return (
     <View style={styles.centered}>
       <ActivityIndicator size="large" color="#f953c6" />
@@ -266,30 +311,44 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.buttonRow}>
-  <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/messages')}>
-    <Text style={styles.actionButtonText}>💬 Messages</Text>
-  </TouchableOpacity>
-  <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/albums')}>
-    <Text style={styles.actionButtonText}>🗂️ Albums</Text>
-  </TouchableOpacity>
-  <TouchableOpacity style={styles.actionButton} onPress={handleSignOut}>
-    <Text style={styles.actionButtonText}>Sign Out</Text>
-  </TouchableOpacity>
-</View>
+          <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/messages')}>
+            <Text style={styles.actionButtonText}>💬 Messages</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/albums')}>
+            <Text style={styles.actionButtonText}>🗂️ Albums</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={handleSignOut}>
+            <Text style={styles.actionButtonText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       <View style={styles.tabRow}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'gallery' && styles.activeTabButton]}
-          onPress={() => setActiveTab('gallery')}>
+          onPress={() => { setSelectMode(false); setSelectedPosts(new Set()); setActiveTab('gallery'); }}>
           <Text style={[styles.tabButtonText, activeTab === 'gallery' && styles.activeTabButtonText]}>🖼️ Gallery</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'favorites' && styles.activeTabButton]}
-          onPress={() => { setActiveTab('favorites'); fetchFavorites(); }}>
+          onPress={() => { setSelectMode(false); setSelectedPosts(new Set()); setActiveTab('favorites'); fetchFavorites(); }}>
           <Text style={[styles.tabButtonText, activeTab === 'favorites' && styles.activeTabButtonText]}>⭐ Favorites</Text>
         </TouchableOpacity>
       </View>
+
+      {selectMode && activeTab === 'gallery' && (
+        <View style={styles.selectBar}>
+          <Text style={styles.selectCount}>{selectedPosts.size} selected</Text>
+          <View style={styles.selectActions}>
+            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteSelected}>
+              <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelSelectButton} onPress={handleCancelSelect}>
+              <Text style={styles.cancelSelectText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {displayedPosts.length === 0 ? (
         <Text style={styles.empty}>
@@ -300,9 +359,15 @@ export default function ProfileScreen() {
           {displayedPosts.map((post) => (
             <TouchableOpacity
               key={post.id}
-              style={styles.gridItem}
-              onPress={() => router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description } })}>
+              style={[styles.gridItem, selectMode && selectedPosts.has(post.id) && styles.selectedGridItem]}
+              onPress={() => selectMode ? handleSelectPost(post.id) : router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description, category: post.category, post_user_id: post.user_id } })}
+              onLongPress={() => activeTab === 'gallery' && handleLongPress(post.id)}>
               <Image source={{ uri: post.image_url }} style={styles.gridImage} />
+              {selectMode && selectedPosts.has(post.id) && (
+                <View style={styles.selectedOverlay}>
+                  <Text style={styles.checkmark}>✓</Text>
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
@@ -524,6 +589,45 @@ const styles = StyleSheet.create({
   activeTabButtonText: {
     color: '#fff',
   },
+  selectBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  selectCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  selectActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  deleteButton: {
+    backgroundColor: '#ff3b30',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  cancelSelectButton: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  cancelSelectText: {
+    color: '#333',
+    fontWeight: '600',
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -534,10 +638,31 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     padding: 2,
   },
+  selectedGridItem: {
+    opacity: 0.7,
+  },
   gridImage: {
     width: '100%',
     height: '100%',
     borderRadius: 4,
+  },
+  selectedOverlay: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    right: 2,
+    bottom: 2,
+    backgroundColor: 'rgba(185, 29, 115, 0.4)',
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#b91d73',
+  },
+  checkmark: {
+    fontSize: 28,
+    color: '#fff',
+    fontWeight: 'bold',
   },
   empty: {
     textAlign: 'center',

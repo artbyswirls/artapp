@@ -1,12 +1,14 @@
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import * as FileSystem from 'expo-file-system';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from '../../supabase';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 type Post = {
   id: string;
@@ -23,6 +25,7 @@ export default function FeedScreen() {
   const [likes, setLikes] = useState<{ [key: string]: boolean }>({});
   const [likeCounts, setLikeCounts] = useState<{ [key: string]: number }>({});
   const [favorites, setFavorites] = useState<{ [key: string]: boolean }>({});
+  const [reposts, setReposts] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -117,6 +120,54 @@ export default function FeedScreen() {
     }
   }
 
+  async function handleRepost(post: Post) {
+    if (!userId) return;
+    if (reposts[post.id]) {
+      Alert.alert('Already reposted', 'You have already reposted this artwork!');
+      return;
+    }
+
+    const { error } = await supabase.from('posts').insert({
+      user_id: userId,
+      image_url: post.image_url,
+      title: `🔁 ${post.title}`,
+      description: `Reposted from @${post.username}. ${post.description || ''}`,
+      category: post.category,
+    });
+
+    if (error) Alert.alert('Error', error.message);
+    else {
+      setReposts(prev => ({ ...prev, [post.id]: true }));
+      Alert.alert('Reposted!', 'This artwork has been shared to your profile!');
+    }
+  }
+
+  async function handleShare(post: Post) {
+    try {
+      const fileUri = (FileSystem.cacheDirectory ?? '') + `shared_art_${Date.now()}.jpg`;
+      const download = await FileSystem.downloadAsync(post.image_url, fileUri);
+
+      if (download.status !== 200) {
+        Alert.alert('Error', 'Could not download image.');
+        return;
+      }
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert('Sharing not available', 'Your device does not support sharing.');
+        return;
+      }
+
+      await Sharing.shareAsync(download.uri, {
+        mimeType: 'image/jpeg',
+        dialogTitle: `Check out "${post.title}" on ArtApp!`,
+        UTI: 'public.jpeg',
+      });
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Could not share this post.');
+    }
+  }
+
   function handleShowDetails(post: Post) {
     setSelectedPost(post);
     bottomSheetRef.current?.expand();
@@ -148,10 +199,16 @@ export default function FeedScreen() {
             <TouchableOpacity style={styles.actionButton} onPress={() => handleFavorite(post.id)}>
               <Text style={styles.actionText}>{favorites[post.id] ? '⭐' : '☆'}</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={() => handleRepost(post)}>
+              <Text style={styles.actionText}>🔁</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={() => handleShare(post)}>
+              <Text style={styles.actionText}>📤</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description } })}>
-              <Text style={styles.actionText}>💬 Comment</Text>
+              onPress={() => router.push({ pathname: '/post', params: { id: post.id, image_url: post.image_url, title: post.title, description: post.description, category: post.category, post_user_id: post.user_id } })}>
+              <Text style={styles.actionText}>💬</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity onPress={() => handleShowDetails(post)}>
@@ -189,9 +246,10 @@ export default function FeedScreen() {
         data={posts}
         renderItem={renderPost}
         keyExtractor={(item) => item.id}
-        horizontal
-        pagingEnabled
+        horizontal={true}
+        pagingEnabled={true}
         showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
         onMomentumScrollEnd={(e) => {
           const index = Math.round(e.nativeEvent.contentOffset.x / width);
           setCurrentIndex(index);
@@ -222,7 +280,6 @@ export default function FeedScreen() {
               ) : (
                 <Text style={styles.noDescription}>No description provided.</Text>
               )}
-
               <TouchableOpacity
                 style={[styles.sheetButton, { marginBottom: 10 }]}
                 onPress={() => {
@@ -237,12 +294,11 @@ export default function FeedScreen() {
                   <Text style={styles.sheetButtonText}>🗂️ Add to Album</Text>
                 </LinearGradient>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.sheetButton}
                 onPress={() => {
                   bottomSheetRef.current?.close();
-                  router.push({ pathname: '/post', params: { id: selectedPost.id, image_url: selectedPost.image_url, title: selectedPost.title, description: selectedPost.description } });
+                  router.push({ pathname: '/post', params: { id: selectedPost.id, image_url: selectedPost.image_url, title: selectedPost.title, description: selectedPost.description, category: selectedPost.category, post_user_id: selectedPost.user_id } });
                 }}>
                 <LinearGradient
                   colors={['#f953c6', '#b91d73']}
@@ -291,11 +347,11 @@ const styles = StyleSheet.create({
   },
   slide: {
     width,
-    flex: 1,
+    height: height - 120,
   },
   image: {
     width,
-    flex: 1,
+    height: height - 120,
   },
   overlay: {
     position: 'absolute',
@@ -303,7 +359,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 80,
   },
   artistRow: {
     marginBottom: 8,
@@ -321,8 +377,9 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: 20,
+    gap: 16,
     marginBottom: 12,
+    flexWrap: 'wrap',
   },
   actionButton: {
     alignItems: 'center',

@@ -9,6 +9,7 @@ import CreateAlbumScreen from './screens/CreateAlbumScreen';
 import ExploreScreen from './screens/ExploreScreen';
 import FeedScreen from './screens/FeedScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import UploadScreen from './screens/UploadScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -19,6 +20,7 @@ function MainTabs() {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Feed" component={FeedScreen} />
       <Tab.Screen name="Explore" component={ExploreScreen} />
+      <Tab.Screen name="Upload" component={UploadScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -33,6 +35,13 @@ export default function App() {
         <Stack.Screen
           name="Home"
           component={MainTabs}
+          options={{ headerShown: false }}
+        />
+
+        {/* Upload Screen */}
+        <Stack.Screen
+          name="Upload"
+          component={UploadScreen}
           options={{ headerShown: false }}
         />
 

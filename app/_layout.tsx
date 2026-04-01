@@ -33,6 +33,7 @@ export default function RootLayout() {
         <Stack.Screen name="albums" options={{ headerShown: false }} />
         <Stack.Screen name="album" options={{ headerShown: false }} />
         <Stack.Screen name="addtoalbum" options={{ headerShown: false }} />
+        <Stack.Screen name="editpost" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

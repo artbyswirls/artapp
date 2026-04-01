@@ -11,11 +11,13 @@ type Comment = {
 };
 
 export default function PostScreen() {
-  const { id, image_url, title, description } = useLocalSearchParams<{
+  const { id, image_url, title, description, category, post_user_id } = useLocalSearchParams<{
     id: string;
     image_url: string;
     title: string;
     description: string;
+    category: string;
+    post_user_id: string;
   }>();
 
   const [comments, setComments] = useState<Comment[]>([]);
@@ -63,13 +65,22 @@ export default function PostScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={styles.container}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+
+        <View style={styles.topRow}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+          {userId === post_user_id && (
+            <TouchableOpacity onPress={() => router.push({ pathname: '/editpost', params: { id, image_url, title, description, category } })}>
+              <Text style={styles.editText}>✏️ Edit</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <Image source={{ uri: image_url }} style={styles.image} />
         <Text style={styles.title}>{title}</Text>
         {description ? <Text style={styles.description}>{description}</Text> : null}
+        {category ? <Text style={styles.category}>#{category}</Text> : null}
 
         <Text style={styles.commentsHeader}>Comments</Text>
 
@@ -105,11 +116,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9f9f9',
     padding: 16,
   },
-  backButton: {
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 60,
     marginBottom: 16,
   },
   backText: {
+    fontSize: 16,
+    color: '#9b59b6',
+    fontWeight: '600',
+  },
+  editText: {
     fontSize: 16,
     color: '#9b59b6',
     fontWeight: '600',
@@ -128,6 +147,11 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     color: '#888',
+    marginBottom: 8,
+  },
+  category: {
+    fontSize: 14,
+    color: '#9b59b6',
     marginBottom: 16,
   },
   commentsHeader: {
