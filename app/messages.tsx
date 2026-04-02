@@ -1,11 +1,13 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../supabase';
 
 type Conversation = {
   user_id: string;
   username: string;
+  avatar_url: string | null;
   last_message: string;
   created_at: string;
 };
@@ -43,13 +45,14 @@ export default function MessagesScreen() {
 
         const { data: userData } = await supabase
           .from('users')
-          .select('username')
+          .select('username, avatar_url')
           .eq('id', otherId)
           .single();
 
         convos.push({
           user_id: otherId,
           username: userData?.username || 'Artist',
+          avatar_url: userData?.avatar_url || null,
           last_message: msg.text,
           created_at: msg.created_at,
         });
@@ -61,13 +64,23 @@ export default function MessagesScreen() {
 
   if (loading) return (
     <View style={styles.centered}>
-      <ActivityIndicator size="large" color="#9b59b6" />
+      <ActivityIndicator size="large" color="#f953c6" />
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>💬 Messages</Text>
+      <LinearGradient
+        colors={['#f953c6', '#b91d73']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerText}>💬 Messages</Text>
+        <View style={{ width: 60 }} />
+      </LinearGradient>
 
       {conversations.length === 0 ? (
         <Text style={styles.empty}>No messages yet. Visit an artist's profile to send a message!</Text>
@@ -79,10 +92,14 @@ export default function MessagesScreen() {
               style={styles.convoCard}
               onPress={() => router.push({ pathname: '/chat', params: { user_id: convo.user_id, username: convo.username } })}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>👤</Text>
+                {convo.avatar_url ? (
+                  <Image source={{ uri: convo.avatar_url }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.avatarText}>👤</Text>
+                )}
               </View>
               <View style={styles.convoInfo}>
-                <Text style={styles.username}>{convo.username}</Text>
+                <Text style={styles.username}>@{convo.username}</Text>
                 <Text style={styles.lastMessage} numberOfLines={1}>{convo.last_message}</Text>
               </View>
             </TouchableOpacity>
@@ -97,7 +114,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f9f9f9',
-    padding: 16,
   },
   centered: {
     flex: 1,
@@ -105,11 +121,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
-    fontSize: 28,
+    paddingTop: 60,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    width: 60,
+  },
+  headerText: {
+    fontSize: 20,
     fontWeight: 'bold',
-    marginTop: 60,
-    marginBottom: 20,
-    textAlign: 'center',
+    color: '#fff',
   },
   empty: {
     textAlign: 'center',
@@ -123,7 +151,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 14,
-    marginBottom: 10,
+    margin: 8,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.06,
@@ -131,13 +159,20 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#e0e0e0',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#f0e6ff',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#f953c6',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontSize: 24,
@@ -149,6 +184,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
+    color: '#333',
   },
   lastMessage: {
     fontSize: 14,

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../supabase';
 
 type Message = {
@@ -9,6 +9,7 @@ type Message = {
   receiver_id: string;
   text: string;
   created_at: string;
+  seen: boolean;
 };
 
 export default function ChatScreen() {
@@ -16,13 +17,25 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [otherAvatar, setOtherAvatar] = useState<string | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     fetchMessages();
+    fetchOtherUser();
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) setCurrentUserId(session.user.id);
     });
   }, []);
+
+  async function fetchOtherUser() {
+    const { data } = await supabase
+      .from('users')
+      .select('avatar_url')
+      .eq('id', user_id)
+      .single();
+    if (data) setOtherAvatar(data.avatar_url);
+  }
 
   async function fetchMessages() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -35,21 +48,47 @@ export default function ChatScreen() {
       .order('created_at', { ascending: true });
 
     if (error) console.log('Error fetching messages:', error);
-    else setMessages(data || []);
+    else {
+      setMessages(data || []);
+      markMessagesAsSeen(session.user.id, data || []);
+    }
+
+    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 100);
+  }
+
+  async function markMessagesAsSeen(myId: string, msgs: Message[]) {
+    const unseenIds = msgs
+      .filter(m => m.sender_id === user_id && m.receiver_id === myId && !m.seen)
+      .map(m => m.id);
+
+    if (unseenIds.length > 0) {
+      await supabase
+        .from('messages')
+        .update({ seen: true })
+        .in('id', unseenIds);
+    }
   }
 
   async function handleSend() {
     if (!newMessage.trim() || !currentUserId) return;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('messages')
-      .insert({ sender_id: currentUserId, receiver_id: user_id, text: newMessage.trim() });
+      .insert({ sender_id: currentUserId, receiver_id: user_id, text: newMessage.trim(), seen: false })
+      .select()
+      .single();
 
     if (error) console.log('Send error:', error);
     else {
+      setMessages(prev => [...prev, data]);
       setNewMessage('');
-      fetchMessages();
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     }
+  }
+
+  function formatTime(dateString: string) {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   return (
@@ -61,23 +100,52 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerUsername}>{username}</Text>
+        <View style={styles.headerInfo}>
+          <View style={styles.headerAvatar}>
+            {otherAvatar ? (
+              <Image source={{ uri: otherAvatar }} style={styles.headerAvatarImage} />
+            ) : (
+              <Text style={styles.headerAvatarEmoji}>👤</Text>
+            )}
+          </View>
+          <Text style={styles.headerUsername}>@{username}</Text>
+        </View>
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView style={styles.messages} contentContainerStyle={{ padding: 16 }}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.messages}
+        contentContainerStyle={{ padding: 16 }}
+        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}>
         {messages.length === 0 ? (
           <Text style={styles.empty}>No messages yet. Say hello!</Text>
         ) : (
-          messages.map((msg) => (
-            <View
-              key={msg.id}
-              style={[styles.bubble, msg.sender_id === currentUserId ? styles.myBubble : styles.theirBubble]}>
-              <Text style={[styles.bubbleText, msg.sender_id === currentUserId && styles.myBubbleText]}>
-                {msg.text}
-              </Text>
-            </View>
-          ))
+          messages.map((msg) => {
+            const isMe = msg.sender_id === currentUserId;
+            return (
+              <View key={msg.id} style={[styles.messageRow, isMe && styles.messageRowMe]}>
+                {!isMe && (
+                  <View style={styles.avatar}>
+                    {otherAvatar ? (
+                      <Image source={{ uri: otherAvatar }} style={styles.avatarImage} />
+                    ) : (
+                      <Text style={styles.avatarEmoji}>👤</Text>
+                    )}
+                  </View>
+                )}
+                <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble]}>
+                  <Text style={[styles.bubbleText, isMe && styles.myBubbleText]}>{msg.text}</Text>
+                  <View style={styles.messageFooter}>
+                    <Text style={[styles.timeText, isMe && styles.myTimeText]}>{formatTime(msg.created_at)}</Text>
+                    {isMe && (
+                      <Text style={styles.seenText}>{msg.seen ? '✓✓' : '✓'}</Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+            );
+          })
         )}
       </ScrollView>
 
@@ -87,6 +155,8 @@ export default function ChatScreen() {
           placeholder="Type a message..."
           value={newMessage}
           onChangeText={setNewMessage}
+          onSubmitEditing={handleSend}
+          returnKeyType="send"
         />
         <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
           <Text style={styles.sendText}>Send</Text>
@@ -114,9 +184,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     width: 60,
   },
-  headerUsername: {
+  headerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0e6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#f953c6',
+  },
+  headerAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  headerAvatarEmoji: {
     fontSize: 18,
+  },
+  headerUsername: {
+    fontSize: 16,
     fontWeight: 'bold',
+    color: '#333',
   },
   messages: {
     flex: 1,
@@ -127,13 +221,36 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 40,
   },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: 12,
+  },
+  messageRowMe: {
+    flexDirection: 'row-reverse',
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0e6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarEmoji: {
+    fontSize: 16,
+  },
   bubble: {
-    maxWidth: '75%',
+    maxWidth: '72%',
     padding: 12,
     borderRadius: 16,
-    marginBottom: 8,
     backgroundColor: '#fff',
-    alignSelf: 'flex-start',
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -141,11 +258,11 @@ const styles = StyleSheet.create({
   },
   myBubble: {
     backgroundColor: '#9b59b6',
-    alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
   },
   theirBubble: {
     backgroundColor: '#fff',
-    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
   },
   bubbleText: {
     fontSize: 15,
@@ -153,6 +270,24 @@ const styles = StyleSheet.create({
   },
   myBubbleText: {
     color: '#fff',
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 4,
+  },
+  timeText: {
+    fontSize: 11,
+    color: '#aaa',
+  },
+  myTimeText: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+  seenText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.7)',
   },
   inputContainer: {
     flexDirection: 'row',

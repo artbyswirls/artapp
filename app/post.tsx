@@ -8,6 +8,8 @@ type Comment = {
   text: string;
   user_id: string;
   created_at: string;
+  username?: string;
+  avatar_url?: string | null;
 };
 
 export default function PostScreen() {
@@ -34,12 +36,19 @@ export default function PostScreen() {
   async function fetchComments() {
     const { data, error } = await supabase
       .from('comments')
-      .select('*')
+      .select('*, users(username, avatar_url)')
       .eq('post_id', id)
       .order('created_at', { ascending: true });
 
     if (error) console.log('Error fetching comments:', error);
-    else setComments(data || []);
+    else {
+      const commentsWithUser = (data || []).map((comment: any) => ({
+        ...comment,
+        username: comment.users?.username || 'Artist',
+        avatar_url: comment.users?.avatar_url || null,
+      }));
+      setComments(commentsWithUser);
+    }
   }
 
   async function handleComment() {
@@ -58,6 +67,11 @@ export default function PostScreen() {
       setNewComment('');
       fetchComments();
     }
+  }
+
+  function formatTime(dateString: string) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
 
   return (
@@ -82,14 +96,33 @@ export default function PostScreen() {
         {description ? <Text style={styles.description}>{description}</Text> : null}
         {category ? <Text style={styles.category}>#{category}</Text> : null}
 
-        <Text style={styles.commentsHeader}>Comments</Text>
+        <Text style={styles.commentsHeader}>Comments ({comments.length})</Text>
 
         {comments.length === 0 ? (
           <Text style={styles.empty}>No comments yet. Be the first!</Text>
         ) : (
           comments.map((comment) => (
             <View key={comment.id} style={styles.comment}>
-              <Text style={styles.commentText}>{comment.text}</Text>
+              <TouchableOpacity
+                onPress={() => router.push({ pathname: '/artist', params: { user_id: comment.user_id, username: comment.username } })}>
+                <View style={styles.commentAvatar}>
+                  {comment.avatar_url ? (
+                    <Image source={{ uri: comment.avatar_url }} style={styles.commentAvatarImage} />
+                  ) : (
+                    <Text style={styles.commentAvatarEmoji}>👤</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+              <View style={styles.commentContent}>
+                <View style={styles.commentHeader}>
+                  <TouchableOpacity
+                    onPress={() => router.push({ pathname: '/artist', params: { user_id: comment.user_id, username: comment.username } })}>
+                    <Text style={styles.commentUsername}>@{comment.username}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.commentTime}>{formatTime(comment.created_at)}</Text>
+                </View>
+                <Text style={styles.commentText}>{comment.text}</Text>
+              </View>
             </View>
           ))
         )}
@@ -143,6 +176,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 8,
+    color: '#333',
   },
   description: {
     fontSize: 14,
@@ -159,15 +193,60 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
     marginTop: 8,
+    color: '#333',
   },
   comment: {
+    flexDirection: 'row',
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  commentAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#f0e6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#f953c6',
+  },
+  commentAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  commentAvatarEmoji: {
+    fontSize: 18,
+  },
+  commentContent: {
+    flex: 1,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  commentUsername: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9b59b6',
+  },
+  commentTime: {
+    fontSize: 11,
+    color: '#aaa',
   },
   commentText: {
     fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
   },
   empty: {
     color: '#888',
