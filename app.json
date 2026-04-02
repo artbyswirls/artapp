@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "ArtApp",
-    "slug": "artapp",
+    "name": "Swirls",
+    "slug": "swirls",
     "scheme": "artapp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.artbyswirls.artapp",
+      "bundleIdentifier": "com.artbyswirls.swirls",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.artbyswirls.artapp"
+      "package": "com.artbyswirls.swirls"
     },
     "web": {
       "favicon": "./assets/images/icon.png"

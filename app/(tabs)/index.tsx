@@ -238,7 +238,7 @@ export default function FeedScreen() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.header}>
-        <Text style={styles.headerText}>🎨 ArtApp</Text>
+        <Text style={styles.headerText}>🎨 Swirls</Text>
         <View style={styles.headerRight}>
           <TouchableOpacity onPress={() => router.push('/trending')}>
             <Text style={styles.trendingButton}>🔥</Text>
