@@ -1,86 +1,73 @@
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../supabase';
 
 const CATEGORIES = ['portrait', 'landscape', 'abstract', 'digital', 'photography', 'traditional', 'fantasy', 'anime'];
 
+type User = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+};
+
 export default function UploadScreen() {
   const [image, setImage] = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState('');
+  const [taggedUsers, setTaggedUsers] = useState<User[]>([]);
+  const [userSuggestions, setUserSuggestions] = useState<User[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [tagQuery, setTagQuery] = useState('');
 
   async function pickImage() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: false,
-      quality: 0.8,
-      base64: true,
+      quality: 1,
     });
+    if (!result.canceled) setImage(result.assets[0].uri);
+  }
 
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
-      setImageBase64(result.assets[0].base64 || null);
-      setAiSuggestion('');
-      analyzeImage(result.assets[0].base64 || '');
+  async function handleDescriptionChange(text: string) {
+    setDescription(text);
+
+    const atIndex = text.lastIndexOf('@');
+    if (atIndex !== -1) {
+      const query = text.slice(atIndex + 1).split(' ')[0];
+      if (query.length > 0) {
+        setTagQuery(query);
+        const { data } = await supabase
+          .from('users')
+          .select('id, username, avatar_url')
+          .ilike('username', `%${query}%`)
+          .limit(5);
+        setUserSuggestions(data || []);
+        setShowSuggestions(true);
+      } else {
+        setShowSuggestions(false);
+      }
+    } else {
+      setShowSuggestions(false);
     }
   }
 
-  async function analyzeImage(base64: string) {
-    if (!base64) return;
-    setAnalyzing(true);
+  function handleSelectUser(user: User) {
+    const atIndex = description.lastIndexOf('@');
+    const newDescription = description.slice(0, atIndex) + `@${user.username} `;
+    setDescription(newDescription);
+    setShowSuggestions(false);
 
-    try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 100,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: 'image/jpeg',
-                    data: base64,
-                  },
-                },
-                {
-                  type: 'text',
-                  text: 'Look at this artwork and suggest ONE category from this list that best fits it: portrait, landscape, abstract, digital, photography, traditional, fantasy, anime. Reply with ONLY the single word category, nothing else.',
-                },
-              ],
-            },
-          ],
-        }),
-      });
-
-      const data = await response.json();
-      const suggestion = data.content?.[0]?.text?.trim().toLowerCase() || '';
-
-      if (CATEGORIES.includes(suggestion)) {
-        setAiSuggestion(suggestion);
-        setCategory(suggestion);
-      }
-    } catch (error) {
-      console.log('AI analysis error:', error);
+    if (!taggedUsers.find(u => u.id === user.id)) {
+      setTaggedUsers(prev => [...prev, user]);
     }
+  }
 
-    setAnalyzing(false);
+  function removeTag(userId: string) {
+    setTaggedUsers(prev => prev.filter(u => u.id !== userId));
   }
 
   async function handleUpload() {
@@ -110,19 +97,26 @@ export default function UploadScreen() {
         .from('posts')
         .getPublicUrl(fileName);
 
-      const { error: postError } = await supabase
+      const { data: postData, error: postError } = await supabase
         .from('posts')
-        .insert({ user_id: user?.id, image_url: publicUrl, title, description, category });
+        .insert({ user_id: user?.id, image_url: publicUrl, title, description, category })
+        .select()
+        .single();
 
       if (postError) throw postError;
 
+      if (taggedUsers.length > 0 && postData) {
+        await supabase.from('post_tags').insert(
+          taggedUsers.map(u => ({ post_id: postData.id, tagged_user_id: u.id }))
+        );
+      }
+
       Alert.alert('🎨 Posted!', 'Your art has been shared!');
       setImage(null);
-      setImageBase64(null);
       setTitle('');
       setDescription('');
       setCategory('');
-      setAiSuggestion('');
+      setTaggedUsers([]);
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -139,7 +133,7 @@ export default function UploadScreen() {
         <Text style={styles.headerText}>➕ Upload Art</Text>
       </LinearGradient>
 
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
           {image ? (
             <Image source={{ uri: image }} style={styles.previewImage} />
@@ -151,19 +145,6 @@ export default function UploadScreen() {
           )}
         </TouchableOpacity>
 
-        {analyzing && (
-          <View style={styles.aiContainer}>
-            <ActivityIndicator size="small" color="#b91d73" />
-            <Text style={styles.aiText}>🤖 AI is analyzing your artwork...</Text>
-          </View>
-        )}
-
-        {aiSuggestion ? (
-          <View style={styles.aiContainer}>
-            <Text style={styles.aiText}>🤖 AI suggested: <Text style={styles.aiSuggestion}>#{aiSuggestion}</Text></Text>
-          </View>
-        ) : null}
-
         <TextInput
           style={styles.input}
           placeholder="Title *"
@@ -172,15 +153,52 @@ export default function UploadScreen() {
           placeholderTextColor="#aaa"
         />
 
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Description (optional)"
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={3}
-          placeholderTextColor="#aaa"
-        />
+        <View>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Description — type @ to tag someone"
+            value={description}
+            onChangeText={handleDescriptionChange}
+            multiline
+            numberOfLines={3}
+            placeholderTextColor="#aaa"
+          />
+          {showSuggestions && userSuggestions.length > 0 && (
+            <View style={styles.suggestions}>
+              {userSuggestions.map((user) => (
+                <TouchableOpacity
+                  key={user.id}
+                  style={styles.suggestionItem}
+                  onPress={() => handleSelectUser(user)}>
+                  <View style={styles.suggestionAvatar}>
+                    {user.avatar_url ? (
+                      <Image source={{ uri: user.avatar_url }} style={styles.suggestionAvatarImage} />
+                    ) : (
+                      <Text style={styles.suggestionAvatarEmoji}>👤</Text>
+                    )}
+                  </View>
+                  <Text style={styles.suggestionUsername}>@{user.username}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {taggedUsers.length > 0 && (
+          <View style={styles.taggedContainer}>
+            <Text style={styles.taggedLabel}>Tagged:</Text>
+            <View style={styles.taggedList}>
+              {taggedUsers.map((user) => (
+                <TouchableOpacity
+                  key={user.id}
+                  style={styles.tagChip}
+                  onPress={() => removeTag(user.id)}>
+                  <Text style={styles.tagChipText}>@{user.username} ✕</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
 
         <Text style={styles.categoryLabel}>Category</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesRow}>
@@ -256,27 +274,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  aiContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  aiText: {
-    fontSize: 14,
-    color: '#555',
-  },
-  aiSuggestion: {
-    color: '#b91d73',
-    fontWeight: '700',
-  },
   input: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -292,6 +289,73 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: 'top',
+  },
+  suggestions: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginTop: -8,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  suggestionAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0e6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    overflow: 'hidden',
+  },
+  suggestionAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  suggestionAvatarEmoji: {
+    fontSize: 18,
+  },
+  suggestionUsername: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  taggedContainer: {
+    marginBottom: 12,
+  },
+  taggedLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 8,
+  },
+  taggedList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tagChip: {
+    backgroundColor: '#f0e6ff',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#9b59b6',
+  },
+  tagChipText: {
+    color: '#9b59b6',
+    fontSize: 13,
+    fontWeight: '600',
   },
   categoryLabel: {
     fontSize: 16,
